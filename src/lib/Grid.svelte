@@ -8,7 +8,6 @@
     changeOnClick,
   } from "./state";
   import { get } from "svelte/store";
-  import { cosineWindow } from "@tensorflow/tfjs-core";
 
   const TICK_SPEED: number = 1000;
   const MASK_TIME: number = 100;
@@ -33,6 +32,7 @@
     if (isBlinking && $cameraInitialized) {
       if (get(changeOnBlink)) {
         swapColor(0);
+        console.log("FUCK");
       }
     }
   });

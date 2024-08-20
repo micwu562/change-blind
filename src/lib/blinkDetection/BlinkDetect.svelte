@@ -1,26 +1,22 @@
 <script lang="ts">
-  import {
-    type FaceLandmarksDetector,
-    SupportedModels,
-    createDetector,
-  } from "@tensorflow-models/face-landmarks-detection";
-
   import { Fullscreen } from "lucide-svelte";
 
-  import "@tensorflow/tfjs-core";
-  import "@tensorflow/tfjs-backend-webgl";
-  import "@mediapipe/face_mesh";
   import { onMount } from "svelte";
   import { blinking, cameraInitialized, changeOnBlink } from "../state";
   import { spring } from "../ui/spring";
   import { get } from "svelte/store";
-  import { dev, processFacePoints } from "./points";
-  import { draw } from "./canvas";
+  import { setupModel } from "./loadmodel";
+  import { DrawingUtils, FaceLandmarker } from "@mediapipe/tasks-vision";
+
+  const LEFT_BLENDSHAPE_IDX = 9;
+  const RIGHT_BLENDSHAPE_IDX = 10;
+  const BLINK_THRESHOLD = 0.45;
 
   let containerDiv: HTMLDivElement;
   let canvas: HTMLCanvasElement;
   let canvasCtx: CanvasRenderingContext2D;
   let canvasHeight: number = 0;
+  let drawingUtils: DrawingUtils;
 
   const hover = spring(0, { stiffness: 0.25, damping: 1.0 });
 
@@ -45,16 +41,14 @@
     }
   });
 
-  let lDev: number;
-  let rDev: number;
+  let lScore: number = 0;
+  let rScore: number = 0;
   let leftBlink: boolean = false;
   let rightBlink: boolean = false;
 
-  // Canvas
-
   // Model
 
-  let tfDetector: FaceLandmarksDetector;
+  let tfDetector: FaceLandmarker;
   let tfModelLoaded: Promise<boolean>;
   let loadingText: string = "--";
 
@@ -62,15 +56,11 @@
     tfModelLoaded = new Promise(async (resolve) => {
       try {
         loadingText = "Loading model...";
-        tfDetector = await createDetector(SupportedModels.MediaPipeFaceMesh, {
-          runtime: "mediapipe",
-          solutionPath: "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh",
-          refineLandmarks: true,
-        });
-        loadingText = "Loaded!";
+        tfDetector = await setupModel();
+        loadingText = "Model loaded!";
         resolve(true);
       } catch {
-        loadingText = "Failed to load TF model.";
+        loadingText = "Failed to load model.";
         resolve(false);
       }
     });
@@ -91,6 +81,7 @@
     canvas.width = video.width * window.devicePixelRatio;
     canvas.height = video.height * window.devicePixelRatio;
     canvasCtx = canvas.getContext("2d")!;
+    drawingUtils = new DrawingUtils(canvasCtx);
 
     async function detectAndDraw() {
       if (!$changeOnBlink) {
@@ -98,23 +89,39 @@
         return;
       }
 
-      const predictions = await tfDetector.estimateFaces(video);
+      if (!tfDetector) return;
 
-      if (predictions.length > 0) {
-        const data = processFacePoints(predictions[0].keypoints);
-        draw(canvasCtx, video, data, $hover);
+      const predictions = await tfDetector.detectForVideo(
+        video,
+        performance.now(),
+      );
 
-        lDev = dev(data.leftEyePoints);
-        if (lDev < 6.0) leftBlink = true;
-        if (lDev > 8.0) leftBlink = false;
+      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-        rDev = dev(data.rightEyePoints);
-        if (rDev < 6.0) rightBlink = true;
-        if (rDev > 8.0) rightBlink = false;
-
-        const isBlinking = leftBlink || rightBlink;
-        blinking.set(isBlinking);
+      for (const landmark of predictions.faceLandmarks) {
+        drawingUtils.drawConnectors(
+          landmark,
+          FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+          { color: "#ccc", lineWidth: 1 },
+        );
+        drawingUtils.drawConnectors(
+          landmark,
+          FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
+          { color: "#000", lineWidth: 2 },
+        );
+        drawingUtils.drawConnectors(
+          landmark,
+          FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
+          { color: "#000", lineWidth: 2 },
+        );
       }
+
+      let bs = predictions.faceBlendshapes[0];
+      lScore = bs?.categories[LEFT_BLENDSHAPE_IDX].score ?? 0;
+      rScore = bs?.categories[RIGHT_BLENDSHAPE_IDX].score ?? 0;
+      leftBlink = lScore > BLINK_THRESHOLD;
+      rightBlink = rScore > BLINK_THRESHOLD;
+      blinking.set(leftBlink || rightBlink);
 
       requestAnimationFrame(detectAndDraw);
     }
@@ -169,11 +176,9 @@
   </div>
   <div>
     {loadingText} <br />
-    {lDev?.toFixed(2)}
-    {rDev?.toFixed(2)} <br />
-    {leftBlink}
-    {rightBlink} <br />
-    blink detection needs work lol
+    <span style:color={leftBlink ? "green" : ""}>{lScore?.toFixed(2)}</span>
+    <span style:color={rightBlink ? "green" : ""}>{rScore?.toFixed(2)}</span>
+    <br />
   </div>
 </div>
 
