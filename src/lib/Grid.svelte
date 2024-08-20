@@ -32,7 +32,6 @@
     if (isBlinking && $cameraInitialized) {
       if (get(changeOnBlink)) {
         swapColor(0);
-        console.log("FUCK");
       }
     }
   });
@@ -71,7 +70,6 @@
       hue: "green",
       format: "rgbArray",
     });
-    console.log(colors);
   }
 
   onMount(() => {

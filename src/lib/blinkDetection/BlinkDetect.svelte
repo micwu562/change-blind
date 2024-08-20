@@ -1,9 +1,7 @@
 <script lang="ts">
-  import { Fullscreen } from "lucide-svelte";
-
   import { onMount } from "svelte";
   import { blinking, cameraInitialized, changeOnBlink } from "../state";
-  import { spring } from "../ui/spring";
+
   import { get } from "svelte/store";
   import { setupModel } from "./loadmodel";
   import { DrawingUtils, FaceLandmarker } from "@mediapipe/tasks-vision";
@@ -17,8 +15,6 @@
   let canvasCtx: CanvasRenderingContext2D;
   let canvasHeight: number = 0;
   let drawingUtils: DrawingUtils;
-
-  const hover = spring(0, { stiffness: 0.25, damping: 1.0 });
 
   function setupCanvas() {
     const canvasObserver = new ResizeObserver((entries) => {
@@ -147,13 +143,6 @@
       };
     });
   }
-
-  function onmouseenter() {
-    hover.set(1);
-  }
-  function onmouseleave() {
-    hover.set(0);
-  }
 </script>
 
 <div class="spacer" style:height="12px"></div>
@@ -170,9 +159,6 @@
 >
   <div class="border" on:mouseover={onmouseenter} on:mouseout={onmouseleave}>
     <canvas class="canvas" bind:this={canvas}></canvas>
-    <div class="expand-icon" style:opacity={1 - $hover}>
-      <Fullscreen strokeWidth={1} size={20} />
-    </div>
   </div>
   <div>
     {loadingText} <br />
@@ -189,13 +175,6 @@
 
     transition: opacity 0.16s ease-in-out;
     position: relative;
-  }
-
-  .expand-icon {
-    position: absolute;
-    bottom: 4px;
-    right: 4px;
-    line-height: 0;
   }
 
   .border {
